@@ -8,6 +8,7 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
 local PathfindingService = game:GetService("PathfindingService")
+local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -195,6 +196,7 @@ local selectedFarmMode = "All Map" -- "All Map" or "Spawn Clusters"
 local FARM_MODES = {"All Map", "Spawn Clusters"}
 local RUN_SPEED = 34 -- studs/sec (оптимальная стабильная скорость без откатов античита)
 local playerSpawnPos = nil -- Recorded spawn location (updates upon spawn/respawn)
+local noSafePathCount = 0 -- Consecutive 'no safe path' failures counter
 
 -- Noclip cache
 local nc_cache = {}
@@ -251,9 +253,9 @@ end
 -- Priority list for sorting best drops in "All Items" (Ranked by exact in-game DPS, Damage, Health & Durability stats)
 local ITEM_PRIORITIES = {
     -- Tier S+ (Top DPS & Max Health/Damage)
-    ["Okatana"] = 100,             -- DPS 32.1 (0.7s CD), Durability 100, Legendary
-    ["Heavy Vest"] = 98,           -- +50 Max Health (+50% survivability buffer)
-    ["Dragonslayer Sword"] = 96,   -- Damage 60 (Highest in game!), Hitbox 10x2x10, Legendary
+    ["Dragonslayer Sword"] = 100,  -- Damage 60 (Highest in game!), Hitbox 10x2x10, Legendary (TOP 1 PRIORITY)
+    ["Okatana"] = 98,              -- DPS 32.1 (0.7s CD), Durability 100, Legendary
+    ["Heavy Vest"] = 96,           -- +50 Max Health (+50% survivability buffer)
     ["Katana"] = 94,               -- DPS 32.1 (0.7s CD), Durability 70
     ["Infected Katana"] = 94,      -- DPS 32.1 (0.7s CD), Durability 70
 
@@ -298,9 +300,9 @@ local ITEM_PRIORITIES = {
 local SELECTABLE_ITEMS = {
     "All Items",
     -- Tier S+ & S (Top Weapons & Armor)
+    "Dragonslayer Sword",
     "Okatana",
     "Heavy Vest",
-    "Dragonslayer Sword",
     "Katana",
     "Infected Katana",
     "Carrot Hammer",
@@ -368,6 +370,14 @@ local protectedFilter = {
     ["Knife"] = true,
     ["Sword"] = true,
 }
+
+-- Helper: Get effective item priority (Protected filter items get massive +1000 priority bonus)
+local function getEffectiveItemPriority(itemName)
+    if not itemName then return 0 end
+    local basePriority = ITEM_PRIORITIES[itemName] or 1
+    local filterBonus = (protectedFilter[itemName] == true) and 1000 or 0
+    return basePriority + filterBonus
+end
 
 -- Stats Footer
 local statsBox = Instance.new("Frame")
@@ -504,6 +514,81 @@ local function isItemWanted(itemName)
     return targetFilter[itemName] == true
 end
 
+-- ==========================================
+-- Persistent Configuration System (JSON)
+-- ==========================================
+local CONFIG_FILE = "mecha_farm_config.json"
+local loadedConfig = nil
+
+local function saveConfig()
+    if not writefile then return end
+    local cardPos = nil
+    if mainCard then
+        cardPos = {
+            mainCard.Position.X.Scale,
+            mainCard.Position.X.Offset,
+            mainCard.Position.Y.Scale,
+            mainCard.Position.Y.Offset
+        }
+    end
+    local cfg = {
+        AutoFarm = (AutoFarm == true),
+        BackOnSpawn = (BackOnSpawn == true),
+        selectedFarmMode = selectedFarmMode,
+        targetFilter = targetFilter,
+        protectedFilter = protectedFilter,
+        cardPos = cardPos,
+    }
+    pcall(function()
+        writefile(CONFIG_FILE, HttpService:JSONEncode(cfg))
+    end)
+end
+
+local function loadConfig()
+    if not readfile or not isfile or not isfile(CONFIG_FILE) then return end
+    local ok, raw = pcall(function() return readfile(CONFIG_FILE) end)
+    if not ok or not raw or #raw == 0 then return end
+    local decodeOk, cfg = pcall(function() return HttpService:JSONDecode(raw) end)
+    if not decodeOk or type(cfg) ~= "table" then return end
+    loadedConfig = cfg
+
+    if type(cfg.AutoFarm) == "boolean" then
+        AutoFarm = cfg.AutoFarm
+    end
+    if type(cfg.BackOnSpawn) == "boolean" then
+        BackOnSpawn = cfg.BackOnSpawn
+    end
+    if type(cfg.selectedFarmMode) == "string" and table.find(FARM_MODES, cfg.selectedFarmMode) then
+        selectedFarmMode = cfg.selectedFarmMode
+    end
+    if type(cfg.targetFilter) == "table" then
+        table.clear(targetFilter)
+        for k, v in pairs(cfg.targetFilter) do
+            if v == true then
+                targetFilter[k] = true
+            end
+        end
+        if countSelectedTargets() == 0 and not targetFilter["All Items"] then
+            targetFilter["All Items"] = true
+        end
+    end
+    if type(cfg.protectedFilter) == "table" then
+        table.clear(protectedFilter)
+        for k, v in pairs(cfg.protectedFilter) do
+            if v == true then
+                protectedFilter[k] = true
+            end
+        end
+    end
+    if cfg.cardPos and type(cfg.cardPos) == "table" and #cfg.cardPos >= 4 and mainCard then
+        mainCard.Position = UDim2.new(cfg.cardPos[1], cfg.cardPos[2], cfg.cardPos[3], cfg.cardPos[4])
+    end
+end
+
+-- Load saved configuration immediately
+loadConfig()
+subStatusText.Text = "Mode: " .. selectedFarmMode .. " | Target: " .. getTargetSummary()
+
 -- Synchronize position and ragdoll parts to prevent rubberbanding
 local function syncPos(cf)
     local char, hrp = getChar()
@@ -614,6 +699,7 @@ end
 
 -- Update spawn position on every respawn / round start
 trackConn(LocalPlayer.CharacterAdded:Connect(function(newChar)
+    noSafePathCount = 0
     task.defer(function()
         local hrp = newChar:WaitForChild("HumanoidRootPart", 10)
         if hrp then
@@ -705,13 +791,45 @@ local function findWalkableFloorCandidates(targetPart, preferNearPos)
     return candidates
 end
 
+-- Helper: Find the highest priority spawn currently available on the map
+local function getHighestAvailableSpawn()
+    local char, hrp = getChar()
+    if not char or not hrp then return nil end
+    local myPos = hrp.Position
+    local playerIsInfected = isPlayerInfected()
+    local taggedParts = CollectionService:GetTagged("ToolPickUp")
+
+    local bestCand = nil
+    local bestPriority = -1
+
+    for _, part in ipairs(taggedParts) do
+        if part and part.Parent and part:IsA("BasePart") then
+            local itmName = part:GetAttribute("Item")
+            if itmName and not hasItemInInventory(itmName) then
+                local itemIsInfected = isInfectedItem(itmName)
+                if not itemIsInfected or playerIsInfected then
+                    if isItemWanted(itmName) then
+                        local p = getEffectiveItemPriority(itmName)
+                        local d = (myPos - part.Position).Magnitude
+                        if p > bestPriority or (p == bestPriority and bestCand and d < bestCand.dist) then
+                            bestPriority = p
+                            bestCand = {part = part, name = itmName, priority = p, dist = d}
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return bestCand
+end
+
 -- Forward declaration of AntiCheat rollback pause handler
 local handleRubberband
 
 -- Smooth flight interpolation at RUN_SPEED with strict obstacle detection (NEVER through walls)
-local function flyTo(targetPos)
+local function flyTo(targetPos, currentTargetPriority, currentTargetPart)
     local char, hrp = getChar()
-    if not char or not hrp then return false end
+    if not char or not hrp then return false, false end
 
     startFlight()
 
@@ -724,30 +842,44 @@ local function flyTo(targetPos)
     wallParams.RespectCanCollide = true
 
     local lastPlacedPos = nil
+    local lastPriorityCheck = tick()
 
     while AutoFarm and isRunning do
         local dt = RunService.Heartbeat:Wait()
         if not AutoFarm or not isRunning then
             stopFlight()
-            return false
+            return false, false
         end
 
         char, hrp = getChar()
-        if not char or not hrp then return false end
+        if not char or not hrp then return false, false end
 
         local curPos = hrp.Position
 
         -- AntiCheat Rollback detection: server teleports player backwards
         if lastPlacedPos and (curPos - lastPlacedPos).Magnitude > 4.2 then
             if handleRubberband then handleRubberband() end
-            return false
+            return false, false
+        end
+
+        -- Preemptive priority switch: abruptly retarget if higher priority item appeared
+        if currentTargetPriority and tick() - lastPriorityCheck > 0.18 then
+            lastPriorityCheck = tick()
+            local bestCand = getHighestAvailableSpawn()
+            if bestCand and bestCand.part ~= currentTargetPart and bestCand.priority > currentTargetPriority then
+                statusDot.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+                statusText.Text = "Switching to: " .. bestCand.name .. "!"
+                subStatusText.Text = "Higher priority spawn (" .. bestCand.name .. ")"
+                stopFlight()
+                return false, true
+            end
         end
 
         local toTarget = targetPos - curPos
         local dist = toTarget.Magnitude
 
         if dist <= 1.2 then
-            return true
+            return true, false
         end
 
         local step = math.min(RUN_SPEED * dt, dist)
@@ -757,7 +889,7 @@ local function flyTo(targetPos)
         local wallHit = workspace:Raycast(curPos, stepVec.Unit * (step + 1.2), wallParams)
         if wallHit and wallHit.Instance and not wallHit.Instance:IsDescendantOf(workspace:FindFirstChild("ToolSpawnPoints")) then
             stopFlight()
-            return false
+            return false, false
         end
 
         local nextPos = curPos + stepVec
@@ -774,14 +906,14 @@ local function flyTo(targetPos)
     end
 
     stopFlight()
-    return false
+    return false, false
 end
 
 -- Follow path waypoints with ON-THE-FLY item interception (collects as soon as within 13 studs)
-local function followPathWithInterception(waypoints, targetPart, itemName)
+local function followPathWithInterception(waypoints, targetPart, itemName, currentTargetPriority)
     local char, hrp = getChar()
-    if not char or not hrp then return false, false end
-    if not waypoints or #waypoints < 2 then return true, false end
+    if not char or not hrp then return false, false, false end
+    if not waypoints or #waypoints < 2 then return true, false, false end
 
     startFlight()
 
@@ -796,23 +928,37 @@ local function followPathWithInterception(waypoints, targetPart, itemName)
     local wpIndex = 2
     local totalWps = #waypoints
     local lastPlacedPos = nil
+    local lastPriorityCheck = tick()
 
     while AutoFarm and isRunning and wpIndex <= totalWps do
         local dt = RunService.Heartbeat:Wait()
         if not AutoFarm or not isRunning then
             stopFlight()
-            return false, false
+            return false, false, false
         end
 
         char, hrp = getChar()
-        if not char or not hrp then return false, false end
+        if not char or not hrp then return false, false, false end
 
         local curPos = hrp.Position
 
         -- AntiCheat Rollback detection: server teleports player backwards
         if lastPlacedPos and (curPos - lastPlacedPos).Magnitude > 4.2 then
             if handleRubberband then handleRubberband() end
-            return false, false
+            return false, false, false
+        end
+
+        -- Preemptive priority switch: abruptly retarget if higher priority item appeared
+        if currentTargetPriority and tick() - lastPriorityCheck > 0.18 then
+            lastPriorityCheck = tick()
+            local bestCand = getHighestAvailableSpawn()
+            if bestCand and bestCand.part ~= targetPart and bestCand.priority > currentTargetPriority then
+                statusDot.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+                statusText.Text = "Switching to: " .. bestCand.name .. "!"
+                subStatusText.Text = "Higher priority spawn (" .. bestCand.name .. ")"
+                stopFlight()
+                return false, false, true -- okPath = false, collectedOnFly = false, wasPreempted = true
+            end
         end
 
         -- ON-THE-FLY INTERCEPTION: if character is within pickup range (<= 13 studs) on approach
@@ -833,7 +979,7 @@ local function followPathWithInterception(waypoints, targetPart, itemName)
 
                 if hasItemInInventory(itemName) then
                     stopFlight()
-                    return true, true -- Collected on the fly!
+                    return true, true, false -- Collected on the fly!
                 end
             end
         end
@@ -859,7 +1005,7 @@ local function followPathWithInterception(waypoints, targetPart, itemName)
         local wallHit = workspace:Raycast(curPos, stepVec.Unit * (step + 1.2), wallParams)
         if wallHit and wallHit.Instance and not wallHit.Instance:IsDescendantOf(workspace:FindFirstChild("ToolSpawnPoints")) then
             stopFlight()
-            return false, false
+            return false, false, false
         end
 
         local nextPos = curPos + stepVec
@@ -875,13 +1021,13 @@ local function followPathWithInterception(waypoints, targetPart, itemName)
         lastPlacedPos = nextPos
     end
 
-    return true, false -- Arrived at final floor point beside item
+    return true, false, false -- Arrived at final floor point beside item
 end
 
 -- Check if there is an open, unobstructed overhead air route above partition walls (NEVER through walls!)
-local function tryOverheadFly(destFloor)
+local function tryOverheadFly(destFloor, currentTargetPriority, targetPart)
     local char, hrp = getChar()
-    if not char or not hrp then return false end
+    if not char or not hrp then return false, false end
 
     local wallParams = RaycastParams.new()
     wallParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -907,7 +1053,7 @@ local function tryOverheadFly(destFloor)
 
     if maxAllowedY < minFlightY then
         -- Ceilings are too low (enclosed bunker with full-height walls to ceiling)
-        return false
+        return false, false
     end
 
     local flightAltitude = math.min(minFlightY + 3.0, maxAllowedY)
@@ -918,45 +1064,49 @@ local function tryOverheadFly(destFloor)
     local horizCheck = workspace:Raycast(highStart, highDest - highStart, wallParams)
     if horizCheck then
         -- Wall or obstacle blocks the overhead path at this altitude
-        return false
+        return false, false
     end
 
     -- 4. Overhead path is 100% CLEAR in open air! Fly safely without touching any wall:
     statusText.Text = "Flying overhead..."
 
     -- Step A: Ascend vertically in current room
-    local ok1 = flyTo(highStart)
-    if not ok1 or not AutoFarm or not isRunning then stopFlight() return false end
+    local ok1, pre1 = flyTo(highStart, currentTargetPriority, targetPart)
+    if pre1 then stopFlight() return false, true end
+    if not ok1 or not AutoFarm or not isRunning then stopFlight() return false, false end
 
     -- Step B: Glide horizontally across open air above walls
-    local ok2 = flyTo(highDest)
-    if not ok2 or not AutoFarm or not isRunning then stopFlight() return false end
+    local ok2, pre2 = flyTo(highDest, currentTargetPriority, targetPart)
+    if pre2 then stopFlight() return false, true end
+    if not ok2 or not AutoFarm or not isRunning then stopFlight() return false, false end
 
     -- Step C: Descend vertically into target room
-    local ok3 = flyTo(destFloor + Vector3.new(0, 2.5, 0))
-    if not ok3 or not AutoFarm or not isRunning then stopFlight() return false end
+    local ok3, pre3 = flyTo(destFloor + Vector3.new(0, 2.5, 0), currentTargetPriority, targetPart)
+    if pre3 then stopFlight() return false, true end
+    if not ok3 or not AutoFarm or not isRunning then stopFlight() return false, false end
 
-    return true
+    return true, false
 end
 
 -- Loot item: multi-candidate pathfinding, on-the-fly collection, camera lock, and clean ground navigation
 local function lootItem(targetPart)
-    if not targetPart or not targetPart.Parent then return false end
-    if not AutoFarm or not isRunning then return false end
+    if not targetPart or not targetPart.Parent then return false, false end
+    if not AutoFarm or not isRunning then return false, false end
 
     local itemName = targetPart:GetAttribute("Item") or "Weapon"
+    local currentTargetPriority = getEffectiveItemPriority(itemName)
 
     statusDot.BackgroundColor3 = Color3.fromRGB(168, 85, 247)
     statusText.Text = "Approaching " .. itemName .. "..."
 
     local char, hrp = getChar()
-    if not char or not hrp then return false end
+    if not char or not hrp then return false, false end
 
     -- 1. Ensure character starts from ground level
     if hrp.Position.Y > 29.5 then
         local floorBelow = findFloorBelow(hrp.Position)
         if floorBelow and (hrp.Position.Y - floorBelow.Y) > 2.0 then
-            flyTo(floorBelow + Vector3.new(0, 2.5, 0))
+            flyTo(floorBelow + Vector3.new(0, 2.5, 0), currentTargetPriority, targetPart)
             stopFlight()
         end
     end
@@ -1000,24 +1150,49 @@ local function lootItem(targetPart)
 
     -- 5. Execute path with on-the-fly collection
     if pathWaypoints then
-        local okPath, collectedOnFly = followPathWithInterception(pathWaypoints, targetPart, itemName)
+        local okPath, collectedOnFly, wasPreempted = followPathWithInterception(pathWaypoints, targetPart, itemName, currentTargetPriority)
+        if wasPreempted then
+            stopFlight()
+            return false, true
+        end
         if collectedOnFly or hasItemInInventory(itemName) then
             subStatusText.Text = "Collected: " .. itemName .. " ✓"
+            noSafePathCount = 0
             stopFlight()
-            return true
+            return true, false
         end
         if not okPath or not AutoFarm or not isRunning then
             stopFlight()
-            return false
+            return false, false
         end
     else
         -- No ground path found around walls. Try safe overhead air flight above partition walls:
-        local okOverhead = tryOverheadFly(chosenFloor)
+        local okOverhead, wasPreempted = tryOverheadFly(chosenFloor, currentTargetPriority, targetPart)
+        if wasPreempted then
+            stopFlight()
+            return false, true
+        end
         if not okOverhead then
             -- Item in hermetically sealed room: skip cleanly without touching walls!
-            statusText.Text = "No safe path -> skipping"
+            noSafePathCount = noSafePathCount + 1
+            statusText.Text = "No safe path (" .. noSafePathCount .. "/3) -> skipping"
             stopFlight()
-            return false
+
+            local isHoldingProtected, _ = isHoldingAnyProtectedItem()
+            if not isHoldingProtected and noSafePathCount >= 3 then
+                statusDot.BackgroundColor3 = Color3.fromRGB(255, 69, 58)
+                statusText.Text = "3x No Safe Path -> Resetting..."
+                subStatusText.Text = "Resetting character (no protected items)..."
+                noSafePathCount = 0
+                justRespawned = true
+                local c, h = getChar()
+                local hm = c and c:FindFirstChildOfClass("Humanoid")
+                if hm then
+                    pcall(function() hm.Health = 0 end)
+                end
+                task.wait(2.0)
+            end
+            return false, false
         end
     end
 
@@ -1037,6 +1212,13 @@ local function lootItem(targetPart)
         if not AutoFarm or not isRunning then break end
         if hasItemInInventory(itemName) then break end
 
+        -- Also check if a much higher priority item appeared right now
+        local best = getHighestAvailableSpawn()
+        if best and best.part ~= targetPart and best.priority > currentTargetPriority then
+            stopFlight()
+            return false, true
+        end
+
         if GameNet and GameNet.packets and GameNet.packets.PickUpTool then
             pcall(function()
                 GameNet.packets.PickUpTool.send(targetPart)
@@ -1049,7 +1231,8 @@ local function lootItem(targetPart)
     -- Ascend vertically beside container to clear lip, grab, and descend back down
     if not hasItemInInventory(itemName) and (targetPart.Position.Y - chosenFloor.Y) > 3.0 then
         local targetHigh = Vector3.new(chosenFloor.X, targetPart.Position.Y + 1.5, chosenFloor.Z)
-        flyTo(targetHigh)
+        local okFly, preFly = flyTo(targetHigh, currentTargetPriority, targetPart)
+        if preFly then stopFlight() return false, true end
 
         if cam and hrp then
             cam.CFrame = CFrame.lookAt(hrp.Position + Vector3.new(0, 2.0, 0), targetPart.Position)
@@ -1058,6 +1241,12 @@ local function lootItem(targetPart)
         for attempt = 1, 6 do
             if not AutoFarm or not isRunning then break end
             if hasItemInInventory(itemName) then break end
+
+            local best = getHighestAvailableSpawn()
+            if best and best.part ~= targetPart and best.priority > currentTargetPriority then
+                stopFlight()
+                return false, true
+            end
 
             if GameNet and GameNet.packets and GameNet.packets.PickUpTool then
                 pcall(function()
@@ -1068,29 +1257,31 @@ local function lootItem(targetPart)
         end
 
         -- Descend back to ground floor
-        flyTo(chosenFloor + Vector3.new(0, 2.5, 0))
+        flyTo(chosenFloor + Vector3.new(0, 2.5, 0), currentTargetPriority, targetPart)
         stopFlight()
     else
         stopFlight()
     end
 
-    if hasItemInInventory(itemName) then
+    local isPicked = hasItemInInventory(itemName)
+    if isPicked then
+        noSafePathCount = 0
         subStatusText.Text = "Collected: " .. itemName .. " ✓"
-        return true
+        return true, false
     end
-    return false
+    return false, false
 end
 
 -- Helper: Safe navigation to a target floor coordinate
-local function safeNavigateTo(destFloorPos)
+local function safeNavigateTo(destFloorPos, currentTargetPriority, currentTargetPart)
     local char, hrp = getChar()
-    if not char or not hrp then return false end
-    if (hrp.Position - destFloorPos).Magnitude < 10 then return true end
+    if not char or not hrp then return false, false end
+    if (hrp.Position - destFloorPos).Magnitude < 10 then return true, false end
 
     if hrp.Position.Y > 29.5 then
         local floorBelow = findFloorBelow(hrp.Position)
         if floorBelow and (hrp.Position.Y - floorBelow.Y) > 2.0 then
-            flyTo(floorBelow + Vector3.new(0, 2.5, 0))
+            flyTo(floorBelow + Vector3.new(0, 2.5, 0), currentTargetPriority, currentTargetPart)
             stopFlight()
         end
     end
@@ -1157,13 +1348,13 @@ local function safeNavigateTo(destFloorPos)
     end
 
     if pathWaypoints then
-        local okPath = followPathWithInterception(pathWaypoints, nil, nil)
+        local okPath, _, wasPreempted = followPathWithInterception(pathWaypoints, currentTargetPart, nil, currentTargetPriority)
         stopFlight()
-        return okPath
+        return okPath, wasPreempted
     else
-        local okOverhead = tryOverheadFly(destFloorPos)
+        local okOverhead, wasPreempted = tryOverheadFly(destFloorPos, currentTargetPriority, currentTargetPart)
         stopFlight()
-        return okOverhead
+        return okOverhead, wasPreempted
     end
 end
 
@@ -1329,7 +1520,7 @@ local function runFarmLoop()
                         totalValidSpawns = totalValidSpawns + 1
                         if not hasItemInInventory(itemName) then
                             if isItemWanted(itemName) then
-                                local priority = ITEM_PRIORITIES[itemName] or 1
+                                local priority = getEffectiveItemPriority(itemName)
                                 table.insert(candidateSpawns, {
                                     part = part,
                                     name = itemName,
@@ -1357,9 +1548,15 @@ local function runFarmLoop()
             for _, cand in ipairs(candidateSpawns) do
                 if not AutoFarm or not isRunning then break end
                 farm_target = cand.part
-                if lootItem(cand.part) then
+                local wasPicked, wasPreempted = lootItem(cand.part)
+                if wasPicked then
                     picked = true
                     task.wait(0.1)
+                    break
+                elseif wasPreempted then
+                    farm_target = nil
+                    picked = true
+                    task.wait(0.05)
                     break
                 end
                 task.wait(0.05)
@@ -1423,7 +1620,7 @@ farmToggleRow.Parent = scrollContainer
 local farmPlate = Instance.new("Frame")
 farmPlate.Size = UDim2.fromOffset(24, 24)
 farmPlate.Position = UDim2.new(0, 0, 0.5, -12)
-farmPlate.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+farmPlate.BackgroundColor3 = AutoFarm and Color3.fromRGB(34, 34, 38) or Color3.fromRGB(22, 22, 22)
 farmPlate.BorderSizePixel = 0
 farmPlate.Parent = farmToggleRow
 
@@ -1436,7 +1633,7 @@ farmIcon.Size = UDim2.fromOffset(14, 14)
 farmIcon.Position = UDim2.new(0.5, -7, 0.5, -7)
 farmIcon.BackgroundTransparency = 1
 farmIcon.Image = "rbxassetid://130551565616516" -- zap icon
-farmIcon.ImageColor3 = Color3.fromRGB(180, 180, 180)
+farmIcon.ImageColor3 = AutoFarm and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 180, 180)
 farmIcon.Parent = farmPlate
 
 local farmLabel = Instance.new("TextLabel")
@@ -1453,7 +1650,7 @@ farmLabel.Parent = farmToggleRow
 local farmSwitchTrack = Instance.new("Frame")
 farmSwitchTrack.Size = UDim2.fromOffset(42, 24)
 farmSwitchTrack.Position = UDim2.new(1, -42, 0.5, -12)
-farmSwitchTrack.BackgroundColor3 = Color3.fromRGB(54, 54, 58)
+farmSwitchTrack.BackgroundColor3 = AutoFarm and Color3.fromRGB(52, 199, 89) or Color3.fromRGB(54, 54, 58)
 farmSwitchTrack.BorderSizePixel = 0
 farmSwitchTrack.Parent = farmToggleRow
 
@@ -1463,7 +1660,7 @@ farmSwitchCorner.Parent = farmSwitchTrack
 
 local farmSwitchKnob = Instance.new("Frame")
 farmSwitchKnob.Size = UDim2.fromOffset(20, 20)
-farmSwitchKnob.Position = UDim2.new(0, 2, 0.5, -10)
+farmSwitchKnob.Position = AutoFarm and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
 farmSwitchKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 farmSwitchKnob.BorderSizePixel = 0
 farmSwitchKnob.Parent = farmSwitchTrack
@@ -1480,6 +1677,7 @@ farmSwitchBtn.Parent = farmSwitchTrack
 
 local function setFarmState(state)
     AutoFarm = state
+    saveConfig()
     local targetColor = state and Color3.fromRGB(52, 199, 89) or Color3.fromRGB(54, 54, 58)
     local targetPos = state and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
     local targetPlate = state and Color3.fromRGB(34, 34, 38) or Color3.fromRGB(22, 22, 22)
@@ -1507,6 +1705,10 @@ end
 trackConn(farmSwitchBtn.MouseButton1Click:Connect(function()
     setFarmState(not AutoFarm)
 end))
+
+if AutoFarm then
+    setFarmState(true)
+end
 
 -- AntiCheat Rollback Handler: pauses function for 3 seconds and turns it back on
 local isRollbackActive = false
@@ -1617,6 +1819,7 @@ backSwitchBtn.Parent = backSwitchTrack
 
 local function setBackOnSpawnState(state)
     BackOnSpawn = state
+    saveConfig()
     local targetColor = state and Color3.fromRGB(52, 199, 89) or Color3.fromRGB(54, 54, 58)
     local targetPos = state and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
     local targetPlate = state and Color3.fromRGB(34, 34, 38) or Color3.fromRGB(22, 22, 22)
@@ -1833,6 +2036,7 @@ for _, mode in ipairs(FARM_MODES) do
     trackConn(mBtn.MouseButton1Click:Connect(function()
         selectedFarmMode = mode
         modeBtnText.Text = mode
+        saveConfig()
         toggleModeMenu()
 
         for _, btn in ipairs(modeMenu:GetChildren()) do
@@ -2089,6 +2293,7 @@ for _, item in ipairs(SELECTABLE_ITEMS) do
         end
 
         farm_target = nil
+        saveConfig()
         updateTargetMenuVisuals()
     end))
 end
@@ -2298,6 +2503,7 @@ for _, fItem in ipairs(FILTER_ITEMS) do
         else
             filterBtnText.Text = totalCount .. " Items Protected"
         end
+        saveConfig()
     end))
 end
 
@@ -2342,6 +2548,7 @@ trackConn(mainCard.InputBegan:Connect(function(input)
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 dragging = false
+                saveConfig()
             end
         end)
     end
