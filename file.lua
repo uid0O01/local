@@ -85,7 +85,7 @@ titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.BackgroundTransparency = 1
 titleLabel.Position = UDim2.fromOffset(16, 10)
-titleLabel.Size = UDim2.new(1, -70, 0, 18)
+titleLabel.Size = UDim2.new(1, -104, 0, 18)
 titleLabel.Parent = mainCard
 
 local subLabel = Instance.new("TextLabel")
@@ -97,11 +97,85 @@ subLabel.TextColor3 = Color3.fromRGB(142, 142, 147)
 subLabel.TextXAlignment = Enum.TextXAlignment.Left
 subLabel.BackgroundTransparency = 1
 subLabel.Position = UDim2.fromOffset(16, 28)
-subLabel.Size = UDim2.new(1, -70, 0, 12)
+subLabel.Size = UDim2.new(1, -104, 0, 12)
 subLabel.Parent = mainCard
 
--- Forward declare unload
+-- Forward declare unload & switchTab
 local unload
+local switchTab
+local currentTab = "Farm"
+
+-- Header Tab Container (Farm & Visuals) левее Unload
+local tabContainer = Instance.new("Frame")
+tabContainer.Name = "TabContainer"
+tabContainer.Size = UDim2.fromOffset(52, 24)
+tabContainer.Position = UDim2.new(1, -98, 0, 10)
+tabContainer.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+tabContainer.BorderSizePixel = 0
+tabContainer.ZIndex = 5
+tabContainer.Parent = mainCard
+
+local tabCorner = Instance.new("UICorner")
+tabCorner.CornerRadius = UDim.new(0, 7)
+tabCorner.Parent = tabContainer
+
+-- Animated Selection Indicator (квадратный скругленный серый фон)
+local tabIndicator = Instance.new("Frame")
+tabIndicator.Name = "TabIndicator"
+tabIndicator.Size = UDim2.fromOffset(24, 20)
+tabIndicator.Position = UDim2.fromOffset(2, 2)
+tabIndicator.BackgroundColor3 = Color3.fromRGB(48, 48, 54)
+tabIndicator.BorderSizePixel = 0
+tabIndicator.ZIndex = 6
+tabIndicator.Parent = tabContainer
+
+local tabIndicatorCorner = Instance.new("UICorner")
+tabIndicatorCorner.CornerRadius = UDim.new(0, 6)
+tabIndicatorCorner.Parent = tabIndicator
+
+-- Farm Tab Button (Sword icon from icons.lua)
+local farmTabBtn = Instance.new("TextButton")
+farmTabBtn.Name = "FarmTabBtn"
+farmTabBtn.Size = UDim2.fromOffset(24, 20)
+farmTabBtn.Position = UDim2.fromOffset(2, 2)
+farmTabBtn.BackgroundTransparency = 1
+farmTabBtn.AutoButtonColor = false -- при наведении ничего не происходит
+farmTabBtn.Text = ""
+farmTabBtn.Active = true
+farmTabBtn.ZIndex = 7
+farmTabBtn.Parent = tabContainer
+
+local farmTabIcon = Instance.new("ImageLabel")
+farmTabIcon.Name = "Icon"
+farmTabIcon.Size = UDim2.fromOffset(14, 14)
+farmTabIcon.Position = UDim2.new(0.5, -7, 0.5, -7)
+farmTabIcon.BackgroundTransparency = 1
+farmTabIcon.Image = "rbxassetid://124448418211665" -- sword icon
+farmTabIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+farmTabIcon.ZIndex = 8
+farmTabIcon.Parent = farmTabBtn
+
+-- Visuals Tab Button (Eye icon from icons.lua)
+local visualsTabBtn = Instance.new("TextButton")
+visualsTabBtn.Name = "VisualsTabBtn"
+visualsTabBtn.Size = UDim2.fromOffset(24, 20)
+visualsTabBtn.Position = UDim2.fromOffset(26, 2)
+visualsTabBtn.BackgroundTransparency = 1
+visualsTabBtn.AutoButtonColor = false -- при наведении ничего не происходит
+visualsTabBtn.Text = ""
+visualsTabBtn.Active = true
+visualsTabBtn.ZIndex = 7
+visualsTabBtn.Parent = tabContainer
+
+local visualsTabIcon = Instance.new("ImageLabel")
+visualsTabIcon.Name = "Icon"
+visualsTabIcon.Size = UDim2.fromOffset(14, 14)
+visualsTabIcon.Position = UDim2.new(0.5, -7, 0.5, -7)
+visualsTabIcon.BackgroundTransparency = 1
+visualsTabIcon.Image = "rbxassetid://100033680381365" -- eye icon
+visualsTabIcon.ImageColor3 = Color3.fromRGB(142, 142, 147)
+visualsTabIcon.ZIndex = 8
+visualsTabIcon.Parent = visualsTabBtn
 
 -- Unload Button (1 в 1 дизайн из farm.lua)
 local UnloadBtn = Instance.new("TextButton")
@@ -160,7 +234,7 @@ divider.BackgroundColor3 = Color3.fromRGB(38, 38, 42)
 divider.BorderSizePixel = 0
 divider.Parent = mainCard
 
--- Scrollable Container for Settings
+-- Scrollable Container for Settings (Farm Tab)
 local scrollContainer = Instance.new("ScrollingFrame")
 scrollContainer.Name = "ScrollContainer"
 scrollContainer.Size = UDim2.new(1, 0, 1, -96)
@@ -186,6 +260,122 @@ scrollLayout.SortOrder = Enum.SortOrder.LayoutOrder
 scrollLayout.Padding = UDim.new(0, 8)
 scrollLayout.Parent = scrollContainer
 
+-- Visuals Tab Container
+local visualsContainer = Instance.new("ScrollingFrame")
+visualsContainer.Name = "VisualsContainer"
+visualsContainer.Size = UDim2.new(1, 0, 1, -96)
+visualsContainer.Position = UDim2.fromOffset(0, 50)
+visualsContainer.BackgroundTransparency = 1
+visualsContainer.BorderSizePixel = 0
+visualsContainer.ScrollBarThickness = 2
+visualsContainer.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 66)
+visualsContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+visualsContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+visualsContainer.ClipsDescendants = true
+visualsContainer.Visible = false
+visualsContainer.Parent = mainCard
+
+local visualsPadding = Instance.new("UIPadding")
+visualsPadding.PaddingLeft = UDim.new(0, 16)
+visualsPadding.PaddingRight = UDim.new(0, 16)
+visualsPadding.PaddingTop = UDim.new(0, 6)
+visualsPadding.PaddingBottom = UDim.new(0, 16)
+visualsPadding.Parent = visualsContainer
+
+local visualsLayout = Instance.new("UIListLayout")
+visualsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+visualsLayout.Padding = UDim.new(0, 8)
+visualsLayout.Parent = visualsContainer
+
+-- Header row in Visuals tab
+local visHeaderRow = Instance.new("Frame")
+visHeaderRow.Name = "Row_VisualsHeader"
+visHeaderRow.Size = UDim2.new(1, 0, 0, 24)
+visHeaderRow.BackgroundTransparency = 1
+visHeaderRow.LayoutOrder = 1
+visHeaderRow.Parent = visualsContainer
+
+local visPlate = Instance.new("Frame")
+visPlate.Size = UDim2.fromOffset(24, 24)
+visPlate.Position = UDim2.new(0, 0, 0.5, -12)
+visPlate.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+visPlate.BorderSizePixel = 0
+visPlate.Parent = visHeaderRow
+
+local visPlateCorner = Instance.new("UICorner")
+visPlateCorner.CornerRadius = UDim.new(0, 7)
+visPlateCorner.Parent = visPlate
+
+local visPlateIcon = Instance.new("ImageLabel")
+visPlateIcon.Size = UDim2.fromOffset(14, 14)
+visPlateIcon.Position = UDim2.new(0.5, -7, 0.5, -7)
+visPlateIcon.BackgroundTransparency = 1
+visPlateIcon.Image = "rbxassetid://100033680381365" -- eye icon
+visPlateIcon.ImageColor3 = Color3.fromRGB(180, 180, 180)
+visPlateIcon.Parent = visPlate
+
+local visHeaderLabel = Instance.new("TextLabel")
+visHeaderLabel.Text = "Visuals"
+visHeaderLabel.Font = FontMedium
+visHeaderLabel.TextSize = 13
+visHeaderLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+visHeaderLabel.TextXAlignment = Enum.TextXAlignment.Left
+visHeaderLabel.BackgroundTransparency = 1
+visHeaderLabel.Position = UDim2.new(0, 32, 0, 0)
+visHeaderLabel.Size = UDim2.new(1, -32, 1, 0)
+visHeaderLabel.Parent = visHeaderRow
+
+-- Tab Switching Implementation with Quad Animation
+local closeModeMenu
+local closeTargetMenu
+local closeFilterMenu
+local saveConfig
+
+switchTab = function(tabName, skipTween)
+    if tabName == currentTab and not skipTween then return end
+    currentTab = tabName
+
+    local isFarm = (tabName == "Farm")
+    local targetPos = isFarm and UDim2.fromOffset(2, 2) or UDim2.fromOffset(26, 2)
+    local farmColor = isFarm and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(142, 142, 147)
+    local visColor = isFarm and Color3.fromRGB(142, 142, 147) or Color3.fromRGB(255, 255, 255)
+
+    if not isFarm then
+        if closeModeMenu then closeModeMenu() end
+        if closeTargetMenu then closeTargetMenu() end
+        if closeFilterMenu then closeFilterMenu() end
+    end
+
+    if skipTween then
+        tabIndicator.Position = targetPos
+        farmTabIcon.ImageColor3 = farmColor
+        visualsTabIcon.ImageColor3 = visColor
+    else
+        TweenService:Create(tabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Position = targetPos
+        }):Play()
+        TweenService:Create(farmTabIcon, TweenInfo.new(0.2), {
+            ImageColor3 = farmColor
+        }):Play()
+        TweenService:Create(visualsTabIcon, TweenInfo.new(0.2), {
+            ImageColor3 = visColor
+        }):Play()
+    end
+
+    scrollContainer.Visible = isFarm
+    visualsContainer.Visible = not isFarm
+end
+
+trackConn(farmTabBtn.MouseButton1Click:Connect(function()
+    switchTab("Farm")
+    if saveConfig then saveConfig() end
+end))
+
+trackConn(visualsTabBtn.MouseButton1Click:Connect(function()
+    switchTab("Visuals")
+    if saveConfig then saveConfig() end
+end))
+
 -- State variables
 local AutoFarm = false
 local BackOnSpawn = true -- Return to spawn if holding filtered item
@@ -209,6 +399,10 @@ local function set_farm_noclip(on)
         if hum then
             pcall(function()
                 hum.PlatformStand = false
+                hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+                if hum:GetState() == Enum.HumanoidStateType.Climbing then
+                    hum:ChangeState(Enum.HumanoidStateType.Running)
+                end
             end)
         end
         for _, p in ipairs(char:GetDescendants()) do
@@ -222,6 +416,14 @@ local function set_farm_noclip(on)
         if hum then
             pcall(function()
                 hum.PlatformStand = false
+                if not AutoFarm then
+                    hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+                else
+                    hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+                    if hum:GetState() == Enum.HumanoidStateType.Climbing then
+                        hum:ChangeState(Enum.HumanoidStateType.Running)
+                    end
+                end
             end)
         end
         for p, v in pairs(nc_cache) do
@@ -230,6 +432,153 @@ local function set_farm_noclip(on)
         table.clear(nc_cache)
     end
 end
+
+-- =========================================================================
+-- Dynamic Obstacle Removal & Restoration System (1.8s Stuck -> Remove -> 1s Pass -> Restore)
+-- =========================================================================
+local obstacleCache = {} -- [instance] = { parent = origParent, removedAt = tick(), removalPos = Vector3, restoreAfter = nil }
+
+local function temporarilyRemoveObstacle(instance, removalPos)
+    if not instance or not instance.Parent or not instance:IsDescendantOf(workspace) then return false end
+
+    -- Guard core elements from ever being removed
+    if instance:IsA("Terrain") then return false end
+    if instance:IsDescendantOf(workspace:FindFirstChild("ToolSpawnPoints")) then return false end
+    if instance:IsDescendantOf(workspace:FindFirstChild("Characters")) then return false end
+    local char = LocalPlayer.Character
+    if char and instance:IsDescendantOf(char) then return false end
+    if instance == workspace:FindFirstChild("Map") then return false end
+
+    local target = instance
+    -- If part belongs to a small prop/barrier/door/hatch model, remove the parent model
+    if target.Parent and target.Parent:IsA("Model") and target.Parent ~= workspace and target.Parent.Name ~= "Map" and target.Parent.Name ~= "MapLayout" and target.Parent.Name ~= "Models" and target.Parent.Name ~= "Details" then
+        target = target.Parent
+    end
+
+    if obstacleCache[target] then return true end
+
+    local origParent = target.Parent
+    obstacleCache[target] = {
+        parent = origParent,
+        removedAt = tick(),
+        removalPos = removalPos,
+        restoreAfter = nil
+    }
+
+    pcall(function()
+        target.Parent = nil
+    end)
+    return true
+end
+
+local function findBlockingObstacle(curPos, moveDir)
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return nil end
+
+    local wallParams = RaycastParams.new()
+    wallParams.FilterType = Enum.RaycastFilterType.Exclude
+    local filter = {workspace:FindFirstChild("ToolSpawnPoints"), workspace:FindFirstChild("Characters")}
+    if char then table.insert(filter, char) end
+    wallParams.FilterDescendantsInstances = filter
+    wallParams.RespectCanCollide = true
+
+    local dir = (moveDir and moveDir.Magnitude > 0.01) and moveDir.Unit or hrp.CFrame.LookVector
+    local rayDist = 4.5
+
+    -- 1. Check forward raycasts at eye level, chest level, and foot level
+    local rayOffsets = {Vector3.new(0, 0, 0), Vector3.new(0, 1.8, 0), Vector3.new(0, -1.2, 0)}
+    for _, offset in ipairs(rayOffsets) do
+        local hit = workspace:Raycast(curPos + offset, dir * rayDist, wallParams)
+        if hit and hit.Instance and not hit.Instance:IsA("Terrain") then
+            local inst = hit.Instance
+            if not inst:IsDescendantOf(workspace:FindFirstChild("ToolSpawnPoints")) and not inst:IsDescendantOf(workspace:FindFirstChild("Characters")) then
+                local n = inst.Name:lower()
+                if n ~= "facility" and n ~= "floor" and n ~= "baseplate" and n ~= "map" then
+                    return inst
+                end
+            end
+        end
+    end
+
+    -- 2. Check touching parts in immediate bounding box (stuck inside / wedged against obstacle)
+    local overlap = OverlapParams.new()
+    overlap.FilterType = Enum.RaycastFilterType.Exclude
+    overlap.FilterDescendantsInstances = filter
+    local parts = workspace:GetPartBoundsInBox(hrp.CFrame * CFrame.new(0, 0, -1.2), Vector3.new(3.5, 4.5, 3.5), overlap)
+    for _, p in ipairs(parts) do
+        if p:IsA("BasePart") and p.CanCollide and not p:IsA("Terrain") then
+            local pName = p.Name:lower()
+            if pName ~= "facility" and pName ~= "floor" and pName ~= "baseplate" and pName ~= "map" then
+                return p
+            end
+        end
+    end
+
+    return nil
+end
+
+local function restoreAllObstacles()
+    for inst, data in pairs(obstacleCache) do
+        if inst and data.parent then
+            pcall(function()
+                inst.Parent = data.parent
+            end)
+        end
+    end
+    table.clear(obstacleCache)
+end
+
+local function checkObstaclesPassed(curPos)
+    local now = tick()
+    for inst, data in pairs(obstacleCache) do
+        if not data.restoreAfter then
+            -- Check if character has passed through (moved away by >= 5 studs from removal point)
+            local dist = (curPos - data.removalPos).Magnitude
+            if dist >= 5.0 then
+                -- Passed! Schedule restoration in 1.0 second
+                data.restoreAfter = now + 1.0
+            elseif (now - data.removedAt) >= 6.0 then
+                -- Fallback timeout (6 seconds)
+                data.restoreAfter = now + 1.0
+            end
+        else
+            -- Restore after 1.0 second delay
+            if now >= data.restoreAfter then
+                pcall(function()
+                    if inst and data.parent then
+                        inst.Parent = data.parent
+                    end
+                end)
+                obstacleCache[inst] = nil
+            end
+        end
+    end
+end
+
+-- Active Heartbeat listener for obstacle restoration and climbing neutralization
+trackConn(RunService.Heartbeat:Connect(function()
+    if next(obstacleCache) ~= nil then
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            checkObstaclesPassed(hrp.Position)
+        end
+    end
+
+    if AutoFarm and isRunning then
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            pcall(function()
+                hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+            end)
+            if hum:GetState() == Enum.HumanoidStateType.Climbing then
+                hum:ChangeState(Enum.HumanoidStateType.Running)
+            end
+        end
+    end
+end))
 
 -- Helper: Check if player is currently Infected
 local function isPlayerInfected()
@@ -352,23 +701,8 @@ end
 
 -- Default protected filter
 local protectedFilter = {
-    ["Okatana"] = true,
-    ["Heavy Vest"] = true,
     ["Dragonslayer Sword"] = true,
-    ["Katana"] = true,
-    ["Infected Katana"] = true,
-    ["Carrot Hammer"] = true,
-    ["Hope Edge"] = true,
-    ["Sledgehammer"] = true,
-    ["Heavy Hazmat Suit"] = true,
-    ["Light Vest"] = true,
-    ["Crucible"] = true,
-    ["Breaching Hammer"] = true,
-    ["Carrot Greatsword"] = true,
-    ["Claymore"] = true,
-    ["Battle Axe"] = true,
-    ["Knife"] = true,
-    ["Sword"] = true,
+    ["Okatana"] = true,
 }
 
 -- Helper: Get effective item priority (Protected filter items get massive +1000 priority bonus)
@@ -432,15 +766,59 @@ local function getChar()
     return char, char and char:FindFirstChild("HumanoidRootPart")
 end
 
--- Helper: Check if item is already in Backpack or equipped in Character
+-- Failed pickup cooldown cache to prevent freezing in endless pickup loop
+local failedPickupCache = {}
+
+-- Helper: Check if item is already in Backpack or equipped in Character (case-insensitive + whitespace-agnostic)
 local function hasItemInInventory(itemName)
     if not itemName then return false end
+    local cleanTarget = itemName:lower():gsub("%s+", "")
+
     local bp = LocalPlayer:FindFirstChild("Backpack")
-    if bp and bp:FindFirstChild(itemName) then
+    if bp then
+        if bp:FindFirstChild(itemName) then return true end
+        for _, item in ipairs(bp:GetChildren()) do
+            local cleanName = item.Name:lower():gsub("%s+", "")
+            if cleanName == cleanTarget or item.Name:lower() == itemName:lower() then
+                return true
+            end
+        end
+    end
+
+    local char = LocalPlayer.Character
+    if char then
+        if char:FindFirstChild(itemName) then return true end
+        for _, item in ipairs(char:GetChildren()) do
+            if item:IsA("Tool") or item:IsA("Accessory") then
+                local cleanName = item.Name:lower():gsub("%s+", "")
+                if cleanName == cleanTarget or item.Name:lower() == itemName:lower() then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Helper: Check if item was already collected (in inventory or spawn part has been consumed/destroyed)
+local function isItemAlreadyCollected(targetPart, itemName)
+    if itemName and hasItemInInventory(itemName) then
         return true
     end
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild(itemName) then
+    if not targetPart or not targetPart.Parent or not targetPart:IsDescendantOf(workspace) then
+        return true
+    end
+    -- Check CollectionService tag: when an item is collected/consumed, the game removes "ToolPickUp" tag
+    if not CollectionService:HasTag(targetPart, "ToolPickUp") then
+        return true
+    end
+    -- Check Item attribute: when collected, attribute is nil or changed
+    local curAttr = targetPart:GetAttribute("Item")
+    if curAttr == nil or (itemName and curAttr ~= itemName) then
+        return true
+    end
+    -- Check if visual model inside SpawnPoint was removed
+    if targetPart.Name == "SpawnPoint" and not targetPart:FindFirstChildOfClass("Model") and not targetPart:FindFirstChild("Model") then
         return true
     end
     return false
@@ -520,7 +898,7 @@ end
 local CONFIG_FILE = "mecha_farm_config.json"
 local loadedConfig = nil
 
-local function saveConfig()
+saveConfig = function()
     if not writefile then return end
     local cardPos = nil
     if mainCard then
@@ -538,6 +916,7 @@ local function saveConfig()
         targetFilter = targetFilter,
         protectedFilter = protectedFilter,
         cardPos = cardPos,
+        currentTab = currentTab,
     }
     pcall(function()
         writefile(CONFIG_FILE, HttpService:JSONEncode(cfg))
@@ -583,6 +962,11 @@ local function loadConfig()
     if cfg.cardPos and type(cfg.cardPos) == "table" and #cfg.cardPos >= 4 and mainCard then
         mainCard.Position = UDim2.new(cfg.cardPos[1], cfg.cardPos[2], cfg.cardPos[3], cfg.cardPos[4])
     end
+    if type(cfg.currentTab) == "string" and (cfg.currentTab == "Farm" or cfg.currentTab == "Visuals") then
+        if cfg.currentTab ~= currentTab and switchTab then
+            switchTab(cfg.currentTab, true)
+        end
+    end
 end
 
 -- Load saved configuration immediately
@@ -596,6 +980,14 @@ local function syncPos(cf)
     hrp.CFrame = cf
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
+
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum and hum:GetState() == Enum.HumanoidStateType.Climbing then
+        pcall(function()
+            hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+            hum:ChangeState(Enum.HumanoidStateType.Running)
+        end)
+    end
 
     local rc = char and char:FindFirstChild("RagdollColliders")
     if rc then
@@ -620,7 +1012,12 @@ local function triggerCustomJump()
 
     pcall(function()
         hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
-        hum:ChangeState(Enum.HumanoidStateType.Running)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+        if hum:GetState() == Enum.HumanoidStateType.Climbing then
+            hum:ChangeState(Enum.HumanoidStateType.Running)
+        else
+            hum:ChangeState(Enum.HumanoidStateType.Running)
+        end
         if firesignal then
             firesignal(UserInputService.JumpRequest)
         else
@@ -633,6 +1030,17 @@ end
 local function startFlight()
     isFlying = true
     set_farm_noclip(true)
+
+    local char, hrp = getChar()
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        pcall(function()
+            hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+            if hum:GetState() == Enum.HumanoidStateType.Climbing then
+                hum:ChangeState(Enum.HumanoidStateType.Running)
+            end
+        end)
+    end
 
     if not jumpLoopThread then
         jumpLoopThread = task.spawn(function()
@@ -655,6 +1063,14 @@ local function stopFlight()
     if hum then
         pcall(function()
             hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+            if not AutoFarm then
+                hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+            else
+                hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+                if hum:GetState() == Enum.HumanoidStateType.Climbing then
+                    hum:ChangeState(Enum.HumanoidStateType.Running)
+                end
+            end
         end)
     end
     if hrp then
@@ -791,7 +1207,7 @@ local function findWalkableFloorCandidates(targetPart, preferNearPos)
     return candidates
 end
 
--- Helper: Find the highest priority spawn currently available on the map
+-- Helper: Find the highest priority spawn currently available on the map (ONLY from protectedFilter!)
 local function getHighestAvailableSpawn()
     local char, hrp = getChar()
     if not char or not hrp then return nil end
@@ -808,7 +1224,8 @@ local function getHighestAvailableSpawn()
             if itmName and not hasItemInInventory(itmName) then
                 local itemIsInfected = isInfectedItem(itmName)
                 if not itemIsInfected or playerIsInfected then
-                    if isItemWanted(itmName) then
+                    -- STRICT FILTER CHECK: Preemptive switching ONLY applies to items chosen in No-Reset Filter!
+                    if (protectedFilter[itmName] == true) and isItemWanted(itmName) then
                         local p = getEffectiveItemPriority(itmName)
                         local d = (myPos - part.Position).Magnitude
                         if p > bestPriority or (p == bestPriority and bestCand and d < bestCand.dist) then
@@ -827,7 +1244,7 @@ end
 local handleRubberband
 
 -- Smooth flight interpolation at RUN_SPEED with strict obstacle detection (NEVER through walls)
-local function flyTo(targetPos, currentTargetPriority, currentTargetPart)
+local function flyTo(targetPos, currentTargetPriority, currentTargetPart, targetItemName)
     local char, hrp = getChar()
     if not char or not hrp then return false, false end
 
@@ -843,6 +1260,8 @@ local function flyTo(targetPos, currentTargetPriority, currentTargetPart)
 
     local lastPlacedPos = nil
     local lastPriorityCheck = tick()
+    local lastProgressPos = hrp.Position
+    local lastProgressTime = tick()
 
     while AutoFarm and isRunning do
         local dt = RunService.Heartbeat:Wait()
@@ -854,6 +1273,23 @@ local function flyTo(targetPos, currentTargetPriority, currentTargetPart)
         char, hrp = getChar()
         if not char or not hrp then return false, false end
 
+        -- Neutralize Climbing on every frame
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            pcall(function()
+                hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+            end)
+            if hum:GetState() == Enum.HumanoidStateType.Climbing then
+                hum:ChangeState(Enum.HumanoidStateType.Running)
+            end
+        end
+
+        -- If target item is already collected, return immediately
+        if targetItemName and isItemAlreadyCollected(currentTargetPart, targetItemName) then
+            stopFlight()
+            return true, false
+        end
+
         local curPos = hrp.Position
 
         -- AntiCheat Rollback detection: server teleports player backwards
@@ -862,11 +1298,11 @@ local function flyTo(targetPos, currentTargetPriority, currentTargetPart)
             return false, false
         end
 
-        -- Preemptive priority switch: abruptly retarget if higher priority item appeared
+        -- Preemptive priority switch: abruptly retarget ONLY if a higher priority FILTERED item appeared
         if currentTargetPriority and tick() - lastPriorityCheck > 0.18 then
             lastPriorityCheck = tick()
             local bestCand = getHighestAvailableSpawn()
-            if bestCand and bestCand.part ~= currentTargetPart and bestCand.priority > currentTargetPriority then
+            if bestCand and (protectedFilter[bestCand.name] == true) and bestCand.part ~= currentTargetPart and bestCand.priority > currentTargetPriority then
                 statusDot.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
                 statusText.Text = "Switching to: " .. bestCand.name .. "!"
                 subStatusText.Text = "Higher priority spawn (" .. bestCand.name .. ")"
@@ -882,14 +1318,42 @@ local function flyTo(targetPos, currentTargetPriority, currentTargetPart)
             return true, false
         end
 
+        -- 1.8-second Stuck Obstacle Removal System
+        local moved = (curPos - lastProgressPos).Magnitude
+        if moved > 0.6 then
+            lastProgressPos = curPos
+            lastProgressTime = tick()
+        else
+            local stuckDuration = tick() - lastProgressTime
+            if stuckDuration >= 1.8 then
+                local obs = findBlockingObstacle(curPos, toTarget)
+                if obs then
+                    temporarilyRemoveObstacle(obs, curPos)
+                    lastProgressTime = tick() - 0.8
+                else
+                    if stuckDuration >= 2.5 then
+                        stopFlight()
+                        return false, false
+                    end
+                end
+            end
+        end
+
         local step = math.min(RUN_SPEED * dt, dist)
         local stepVec = toTarget.Unit * step
 
         -- Obstacle guard at chest height: verify step does not hit any solid wall
         local wallHit = workspace:Raycast(curPos, stepVec.Unit * (step + 1.2), wallParams)
         if wallHit and wallHit.Instance and not wallHit.Instance:IsDescendantOf(workspace:FindFirstChild("ToolSpawnPoints")) then
-            stopFlight()
-            return false, false
+            local obs = wallHit.Instance
+            local stuckDuration = tick() - lastProgressTime
+            if stuckDuration >= 1.8 then
+                temporarilyRemoveObstacle(obs, curPos)
+                lastProgressTime = tick() - 0.8
+            else
+                task.wait(0.04)
+                continue
+            end
         end
 
         local nextPos = curPos + stepVec
@@ -929,6 +1393,8 @@ local function followPathWithInterception(waypoints, targetPart, itemName, curre
     local totalWps = #waypoints
     local lastPlacedPos = nil
     local lastPriorityCheck = tick()
+    local lastProgressPos = hrp.Position
+    local lastProgressTime = tick()
 
     while AutoFarm and isRunning and wpIndex <= totalWps do
         local dt = RunService.Heartbeat:Wait()
@@ -940,6 +1406,23 @@ local function followPathWithInterception(waypoints, targetPart, itemName, curre
         char, hrp = getChar()
         if not char or not hrp then return false, false, false end
 
+        -- 1. CRITICAL: Check if item was already collected on EVERY single frame!
+        if itemName and isItemAlreadyCollected(targetPart, itemName) then
+            stopFlight()
+            return true, true, false -- Collected on the fly!
+        end
+
+        -- 2. Neutralize Climbing state on every frame
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            pcall(function()
+                hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+            end)
+            if hum:GetState() == Enum.HumanoidStateType.Climbing then
+                hum:ChangeState(Enum.HumanoidStateType.Running)
+            end
+        end
+
         local curPos = hrp.Position
 
         -- AntiCheat Rollback detection: server teleports player backwards
@@ -948,11 +1431,11 @@ local function followPathWithInterception(waypoints, targetPart, itemName, curre
             return false, false, false
         end
 
-        -- Preemptive priority switch: abruptly retarget if higher priority item appeared
+        -- Preemptive priority switch: abruptly retarget ONLY if higher priority FILTERED item appeared
         if currentTargetPriority and tick() - lastPriorityCheck > 0.18 then
             lastPriorityCheck = tick()
             local bestCand = getHighestAvailableSpawn()
-            if bestCand and bestCand.part ~= targetPart and bestCand.priority > currentTargetPriority then
+            if bestCand and (protectedFilter[bestCand.name] == true) and bestCand.part ~= targetPart and bestCand.priority > currentTargetPriority then
                 statusDot.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
                 statusText.Text = "Switching to: " .. bestCand.name .. "!"
                 subStatusText.Text = "Higher priority spawn (" .. bestCand.name .. ")"
@@ -977,7 +1460,7 @@ local function followPathWithInterception(waypoints, targetPart, itemName, curre
                     end)
                 end
 
-                if hasItemInInventory(itemName) then
+                if isItemAlreadyCollected(targetPart, itemName) then
                     stopFlight()
                     return true, true, false -- Collected on the fly!
                 end
@@ -990,6 +1473,8 @@ local function followPathWithInterception(waypoints, targetPart, itemName, curre
 
         if dist <= 2.2 then
             wpIndex = wpIndex + 1
+            lastProgressPos = curPos
+            lastProgressTime = tick()
             if wpIndex > totalWps then
                 break
             end
@@ -998,14 +1483,44 @@ local function followPathWithInterception(waypoints, targetPart, itemName, curre
             dist = toTarget.Magnitude
         end
 
+        -- 1.8-second Stuck Obstacle Removal System
+        local moved = (curPos - lastProgressPos).Magnitude
+        if moved > 0.6 then
+            lastProgressPos = curPos
+            lastProgressTime = tick()
+        else
+            local stuckDuration = tick() - lastProgressTime
+            if stuckDuration >= 1.8 then
+                local obs = findBlockingObstacle(curPos, toTarget)
+                if obs then
+                    temporarilyRemoveObstacle(obs, curPos)
+                    lastProgressTime = tick() - 0.8
+                else
+                    -- Advance stuck waypoint or break
+                    wpIndex = wpIndex + 1
+                    lastProgressTime = tick()
+                    if wpIndex > totalWps then
+                        break
+                    end
+                end
+            end
+        end
+
         local step = math.min(RUN_SPEED * dt, dist)
         local stepVec = toTarget.Unit * step
 
         -- Obstacle guard at chest height: verify step does not hit any solid wall
         local wallHit = workspace:Raycast(curPos, stepVec.Unit * (step + 1.2), wallParams)
         if wallHit and wallHit.Instance and not wallHit.Instance:IsDescendantOf(workspace:FindFirstChild("ToolSpawnPoints")) then
-            stopFlight()
-            return false, false, false
+            local obs = wallHit.Instance
+            local stuckDuration = tick() - lastProgressTime
+            if stuckDuration >= 1.8 then
+                temporarilyRemoveObstacle(obs, curPos)
+                lastProgressTime = tick() - 0.8
+            else
+                task.wait(0.04)
+                continue
+            end
         end
 
         local nextPos = curPos + stepVec
@@ -1155,7 +1670,9 @@ local function lootItem(targetPart)
             stopFlight()
             return false, true
         end
-        if collectedOnFly or hasItemInInventory(itemName) then
+        if collectedOnFly or isItemAlreadyCollected(targetPart, itemName) then
+            statusDot.BackgroundColor3 = Color3.fromRGB(52, 199, 89)
+            statusText.Text = "Collected " .. itemName
             subStatusText.Text = "Collected: " .. itemName .. " ✓"
             noSafePathCount = 0
             stopFlight()
@@ -1197,29 +1714,41 @@ local function lootItem(targetPart)
     end
 
     -- 6. Arrived at floor spot beside item (within 4-8 studs)! Perform final pickup with camera alignment
+    if isItemAlreadyCollected(targetPart, itemName) then
+        statusDot.BackgroundColor3 = Color3.fromRGB(52, 199, 89)
+        statusText.Text = "Collected " .. itemName
+        subStatusText.Text = "Collected: " .. itemName .. " ✓"
+        noSafePathCount = 0
+        stopFlight()
+        return true, false
+    end
+
     statusText.Text = "Picking up " .. itemName .. "..."
     char, hrp = getChar()
     local cam = workspace.CurrentCamera
 
-    if hrp then
+    if hrp and targetPart and targetPart.Parent then
         hrp.CFrame = CFrame.lookAt(hrp.Position, Vector3.new(targetPart.Position.X, hrp.Position.Y, targetPart.Position.Z))
     end
-    if cam and hrp then
+    if cam and hrp and targetPart and targetPart.Parent then
         cam.CFrame = CFrame.lookAt(hrp.Position + Vector3.new(0, 2.0, 0), targetPart.Position)
     end
 
     for attempt = 1, 6 do
         if not AutoFarm or not isRunning then break end
-        if hasItemInInventory(itemName) then break end
+        if isItemAlreadyCollected(targetPart, itemName) then break end
 
-        -- Also check if a much higher priority item appeared right now
+        -- Also check if a much higher priority FILTERED item appeared right now
         local best = getHighestAvailableSpawn()
-        if best and best.part ~= targetPart and best.priority > currentTargetPriority then
+        if best and (protectedFilter[best.name] == true) and best.part ~= targetPart and best.priority > currentTargetPriority then
+            statusDot.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+            statusText.Text = "Switching to: " .. best.name .. "!"
+            subStatusText.Text = "Higher priority spawn (" .. best.name .. ")"
             stopFlight()
             return false, true
         end
 
-        if GameNet and GameNet.packets and GameNet.packets.PickUpTool then
+        if GameNet and GameNet.packets and GameNet.packets.PickUpTool and targetPart and targetPart.Parent then
             pcall(function()
                 GameNet.packets.PickUpTool.send(targetPart)
             end)
@@ -1229,26 +1758,29 @@ local function lootItem(targetPart)
 
     -- 7. If still not collected and item is on high container roof (> 3 studs above chosen floor):
     -- Ascend vertically beside container to clear lip, grab, and descend back down
-    if not hasItemInInventory(itemName) and (targetPart.Position.Y - chosenFloor.Y) > 3.0 then
+    if not isItemAlreadyCollected(targetPart, itemName) and targetPart and targetPart.Parent and targetPart:IsDescendantOf(workspace) and (targetPart.Position.Y - chosenFloor.Y) > 3.0 then
         local targetHigh = Vector3.new(chosenFloor.X, targetPart.Position.Y + 1.5, chosenFloor.Z)
         local okFly, preFly = flyTo(targetHigh, currentTargetPriority, targetPart)
         if preFly then stopFlight() return false, true end
 
-        if cam and hrp then
+        if cam and hrp and targetPart and targetPart.Parent then
             cam.CFrame = CFrame.lookAt(hrp.Position + Vector3.new(0, 2.0, 0), targetPart.Position)
         end
 
         for attempt = 1, 6 do
             if not AutoFarm or not isRunning then break end
-            if hasItemInInventory(itemName) then break end
+            if isItemAlreadyCollected(targetPart, itemName) then break end
 
             local best = getHighestAvailableSpawn()
-            if best and best.part ~= targetPart and best.priority > currentTargetPriority then
+            if best and (protectedFilter[best.name] == true) and best.part ~= targetPart and best.priority > currentTargetPriority then
+                statusDot.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+                statusText.Text = "Switching to: " .. best.name .. "!"
+                subStatusText.Text = "Higher priority spawn (" .. best.name .. ")"
                 stopFlight()
                 return false, true
             end
 
-            if GameNet and GameNet.packets and GameNet.packets.PickUpTool then
+            if GameNet and GameNet.packets and GameNet.packets.PickUpTool and targetPart and targetPart.Parent then
                 pcall(function()
                     GameNet.packets.PickUpTool.send(targetPart)
                 end)
@@ -1263,12 +1795,22 @@ local function lootItem(targetPart)
         stopFlight()
     end
 
-    local isPicked = hasItemInInventory(itemName)
+    local isPicked = isItemAlreadyCollected(targetPart, itemName)
     if isPicked then
         noSafePathCount = 0
+        statusDot.BackgroundColor3 = Color3.fromRGB(52, 199, 89)
+        statusText.Text = "Collected " .. itemName
         subStatusText.Text = "Collected: " .. itemName .. " ✓"
         return true, false
     end
+
+    -- If we arrived and attempted 6 times, but item was still not picked, add cooldown so we don't freeze on it
+    if targetPart then
+        failedPickupCache[targetPart] = tick()
+    end
+    statusDot.BackgroundColor3 = Color3.fromRGB(255, 149, 0)
+    statusText.Text = "Pickup timeout (" .. itemName .. ")"
+    subStatusText.Text = "Skipping unpickable spawn"
     return false, false
 end
 
@@ -1360,6 +1902,7 @@ end
 
 -- Helper: Safely return to player's spawn point using ground Pathfinding & obstacle checks
 local function safeReturnToSpawn()
+    if isPlayerInfected() then return false end
     if not playerSpawnPos then return false end
     local destFloor = findFloorBelow(playerSpawnPos) or playerSpawnPos
     return safeNavigateTo(destFloor)
@@ -1479,9 +2022,12 @@ local function runFarmLoop()
             end
         end
 
+        local playerIsInfected = isPlayerInfected()
+
         -- Back on Spawn: if player holds ANY item from the protected filter, safely return to spawn!
+        -- EXCEPTION: If player is Infected, NEVER return to spawn!
         local isHoldingProtected, protectedName = isHoldingAnyProtectedItem()
-        if BackOnSpawn and isHoldingProtected and playerSpawnPos then
+        if BackOnSpawn and not playerIsInfected and isHoldingProtected and playerSpawnPos then
             local destFloor = findFloorBelow(playerSpawnPos) or playerSpawnPos
             local distToSpawn = (hrp.Position - destFloor).Magnitude
             if distToSpawn > 10 then
@@ -1503,8 +2049,6 @@ local function runFarmLoop()
             end
         end
 
-        local playerIsInfected = isPlayerInfected()
-
         local taggedParts = CollectionService:GetTagged("ToolPickUp")
         local candidateSpawns = {}
         local totalValidSpawns = 0
@@ -1518,7 +2062,8 @@ local function runFarmLoop()
 
                     if canPickUp then
                         totalValidSpawns = totalValidSpawns + 1
-                        if not hasItemInInventory(itemName) then
+                        local isCoolingDown = failedPickupCache[part] and (tick() - failedPickupCache[part]) < 5
+                        if not isCoolingDown and not hasItemInInventory(itemName) then
                             if isItemWanted(itemName) then
                                 local priority = getEffectiveItemPriority(itemName)
                                 table.insert(candidateSpawns, {
@@ -1584,10 +2129,15 @@ local function runFarmLoop()
                 task.wait(1.0)
             else
                 local isHoldingProtected, protectedName = isHoldingAnyProtectedItem()
-                if isHoldingProtected then
+                if isHoldingProtected or playerIsInfected then
                     statusDot.BackgroundColor3 = Color3.fromRGB(255, 214, 72)
-                    statusText.Text = "Protected: Holding " .. tostring(protectedName)
-                    subStatusText.Text = "Spawns: " .. totalValidSpawns .. " (all duplicate/unwanted)"
+                    if playerIsInfected then
+                        statusText.Text = "Infected: Active"
+                        subStatusText.Text = "Spawns: " .. totalValidSpawns .. " (all duplicate/unwanted)"
+                    else
+                        statusText.Text = "Protected: Holding " .. tostring(protectedName)
+                        subStatusText.Text = "Spawns: " .. totalValidSpawns .. " (all duplicate/unwanted)"
+                    end
                     if selectedFarmMode == "Spawn Clusters" and mainCluster then
                         moveToCluster(mainCluster)
                     end
@@ -1691,6 +2241,14 @@ local function setFarmState(state)
     if not state then
         farm_target = nil
         stopFlight()
+        restoreAllObstacles()
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            pcall(function()
+                hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+            end)
+        end
         statusDot.BackgroundColor3 = Color3.fromRGB(142, 142, 147)
         statusText.Text = "Idle"
     else
@@ -1841,10 +2399,6 @@ end))
 local toggleModeMenu
 local toggleTargetMenu
 local toggleFilterMenu
-
-local closeModeMenu
-local closeTargetMenu
-local closeFilterMenu
 
 -- 3. iOS ComboBox: Farm Mode Selector ("All Map" vs "Spawn Clusters")
 local modeHeaderRow = Instance.new("Frame")
@@ -2512,6 +3066,15 @@ unload = function()
     setFarmState(false)
     isRunning = false
     stopFlight()
+    restoreAllObstacles()
+
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        pcall(function()
+            hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+        end)
+    end
 
     -- Disconnect events
     for _, c in ipairs(connections) do
